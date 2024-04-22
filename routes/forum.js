@@ -100,15 +100,11 @@ function formatSingleObject(data) {
   return data
 }
 
-// Returns an escaped regex
-function fuzzyText(text) {
-    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")
-}
 
 router
   // Search for threads/replies via search box on nav bar
   .get('/search', (req, res) => {
-    var fuzzyQuery = new RegExp(fuzzyText(req.query.query), 'gi')
+    var fuzzyQuery = new RegExp(req.query.query, 'gi')
     mongo.db.collection('threads')
       .find({ $or: [{ body: fuzzyQuery }, { subject: fuzzyQuery }, { posterUsername: fuzzyQuery }] })
       .toArray((err, matchingThreads) => {
@@ -183,7 +179,7 @@ router
         newReply.parentThreadSubject = result.subject
         // Add reply to database and redirect to thread
         mongo.db.collection('replies')
-          .insert(newReply, (err, result) => {
+          .insertOne(newReply, (err, result) => {
             if(err){console.log(err)}else {
               res.redirect('/thread/'+req.params.id)
             }
@@ -221,6 +217,12 @@ router
                 thread.lcCategory = thread.category.toLowerCase()
                 thread.lcTopic = thread.topic
                 thread.topic = thread.topic.capitalizeFirstLetter()
+                thread.body = thread.body
+                  .replace('<script', '')
+                  .replace('<img', '')
+                  .replace('<svg', '')
+                  .replace('javascript:', '')
+
                 if (thread.subject.length > 18) {
                   thread.browserTitle = thread.subject.slice(0, 15) + '...'
                 }else {
@@ -263,10 +265,16 @@ router
 
     // Add thread to database
     mongo.db.collection('threads')
-      .insert(newThread, (err, result) => {
+      .insertOne(newThread, (err, result) => {
         if (err) {console.log(err)}else {
-          var category = getCategoryFromTopic(req.query.topic)
-          res.redirect('/thread/'+result.ops[0]._id)
+          console.log(result)
+          mongo.db.collection('threads').findOne(result.insertedId, (e, resultt) => {
+            if (err) {console.log(err)}else {
+              console.log(resultt)
+              var category = getCategoryFromTopic(req.query.topic)
+              res.redirect('/thread/'+resultt._id)
+            }
+          });
         }
       })
   })

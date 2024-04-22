@@ -22,7 +22,7 @@
         <div style="font-size: 20px; display: block; width: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis" class="list-group-item active">{{ thread.subject }}</div>
         <div style="display: flex; height: 100%; width: 100%; padding-left: 0" class="list-group-item">
           <div class="col-sm-2 col-xs-4" style="text-align: center">
-            <img style="width: 70%" src="{{thread.posterImg}}" onerror="this.src='/images/profile.png'">
+            <img class="fallback-img" style="width: 70%" data-src="{{thread.posterImg}}">
             <a style="display: block; width: 100%; padding-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis" href="/user/{{ thread.posterUsername }}">
               {{#thread.posterIsAdmin}}
                 <span style="color: #e84d30" title="Admin" data-toggle="tooltip" data-placement="right">{{ thread.posterUsername }}</span>
@@ -34,13 +34,13 @@
           </div>
           <div style="padding-left: 20px; border-left: solid rgba(51, 51, 51, 0.11) 1px" class="col-sm-10 col-xs-9 pull-right">
             <small title="{{ thread.formatedPostDate }}" data-toggle="tooltip" data-placement="top">{{ thread.relativePostDate }}</small>
-            <p style="white-space: pre-wrap; overflow-wrap: break-word;" class="lead">{{ thread.body }}</p>
+            <p style="white-space: pre-wrap; overflow-wrap: break-word;" class="lead">{{{ thread.body }}}</p>
           </div>
         </div>
         {{#thread.replies}}
           <div style="display: flex; overflow-wrap: break-word; height: 100%; width: 100%; padding-left: 0" class="list-group-item pull-right">
             <div class="col-sm-15 col-xs-3" style="text-align: center">
-              <img style="width: 70%" src="{{posterImg}}" onerror="this.src='/images/profile.png'">
+              <img class="fallback-img" style="width: 70%" data-src="{{posterImg}}">
               <a style="display: block; width: 100%; padding-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis" href="/user/{{ posterUsername }}">
                 {{#posterIsAdmin}}
                   <span style="color: #e84d30" title="Admin" data-toggle="tooltip" data-placement="right">{{ posterUsername }}</span>

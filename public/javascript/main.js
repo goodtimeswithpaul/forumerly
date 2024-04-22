@@ -11,4 +11,16 @@ $( document ).ready(function() {
     $('#upload-button').css('display', 'block')
   })
 
+  $("#fileUpload").on('change', () => {
+    $('#fileNameUpload').html($("#fileUpload").val());
+  })
+
+  $('.fallback-img')
+    .on('error', function () {
+      $(this).attr('src', '/images/profile.png');
+    })
+    .attr('src', function () {
+      // Get the value from the data-src attribute
+      return $(this).data('src');
+    });
 });

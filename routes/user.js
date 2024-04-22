@@ -2,21 +2,77 @@
 const express = require('express')
 const router = express.Router()
 const mongo = require('../db')
-const bcrypt = require('bcrypt-nodejs')
 const moment = require('moment-timezone')
 const fs = require('fs')
 
 // File upload middleware (for profile pictures)
 const multer = require('multer')
 const upload = multer({dest: 'public/images/profileImages', limits: {fileSize: 2000000}})
-
+const uploadUsers = multer({storage: multer.memoryStorage(), limits: {fileSize: 2000000}})
 
 moment.tz.setDefault("America/New_York") // All formated times will be in this timezone by default
+
+function isObject(item) {
+  return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+function merge(target, source) {
+  Object.keys(source).forEach(key => {
+    if (isObject(source[key])) {
+      if (!target[key]) {
+        target[key] = {};
+      }
+      merge(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  });
+
+  return target;
+}
 
 // Middleware requiring the user to be authenticated
 function loginRequired(req, res, next) {
   if (!req.isAuthenticated()) {
     req.flash('info', 'You must be logged in to perform that action.')
+    return res.redirect('back')
+  }
+  next()
+}
+
+// Middleware requiring the user to be an administrator
+function adminRequired(req, res, next) {
+  if (req.isAuthenticated()) {
+    if (!req.user.admin) {
+      req.flash('error', 'Only site administrators are permitted to visit that page.')
+      return res.redirect('back')
+    }
+    next()
+  }else {
+    req.flash('error', 'Only site administrators are permitted to visit that page.')
+    return res.redirect('back')
+  }
+}
+
+function validatePassword(req, res, next) {
+
+  let pass = req.body.newPassword;
+  let name = req.user.username;
+
+  // vaildate password
+  if (pass.match(name)) {
+    req.flash('error', 'Do not include name in password.')
+    return res.redirect('back')
+  }
+
+
+  if (! (/\d+/.test(pass))) {
+    req.flash('error', 'Password must be composed by numbers')
+    return res.redirect('back')
+  }
+
+   if (pass.length > 30) {
+    req.flash('error', 'Password cannot be longer than 10')
     return res.redirect('back')
   }
   next()
@@ -130,7 +186,7 @@ router
   })
 
   // POST new user password
-  .post('/changePassword', loginRequired, (req, res) => {
+  .post('/changePassword', loginRequired, validatePassword, (req, res) => {
     // If the two new passwords match
     if (req.body.newPassword === req.body.newPassword2) {
       // Find the user in the database
@@ -138,11 +194,10 @@ router
         .findOne({lcUsername: req.user.lcUsername}, (err, result) => {
           if(err){ console.log(err)}else {
             // If the password entered into the "Current password" field is correct
-            if (bcrypt.compareSync(req.body.password, result.password)) {
-              // Set their password to the bcrypt hash of the provided new password
+            if (req.body.password == result.password) {
               mongo.db.collection('users')
                 .updateOne({lcUsername: req.user.lcUsername}, {
-                  $set: {password: bcrypt.hashSync(req.body.newPassword)}
+                  $set: {password: req.body.newPassword}
                 }, (err, result) => {
                   // Callback
                   if(err){ console.log(err)}else {
@@ -171,7 +226,7 @@ router
       .findOne({lcUsername: req.user.lcUsername}, (err, result) => {
         if(err){ console.log(err)}else {
           // If the password provided is correct
-          if (bcrypt.compareSync(req.body.password, result.password)) {
+          if (req.body.password === result.password) {
             // Delete the user from the database and log them out
             mongo.db.collection('users')
               .deleteOne({lcUsername: req.user.lcUsername}, (err, result) => {
@@ -191,20 +246,81 @@ router
 
   // POST route for profile picture upload
   .post('/upload', upload.single('avatar'), (req, res) => {
-    // Move the file and rename it to the user's username
-    fs.rename(req.file.path, req.file.destination + '/' + req.user.username, (err) => {
-      if (err) throw err;
-      // Find the user in the database and set the img variable to the correct path
-      mongo.db.collection('users')
-        .updateOne({username: req.user.username}, {
-          $set: {img: '/images/profileImages/' + req.user.username}
-        }, (err, result) => {
-          if (err) {throw err}else {
-            // Callback
-            res.redirect('back')
+    // Validate file path
+      // Move the file and rename it to the user's username
+      fs.rename(req.file.path, req.file.destination + '/' + req.user.username, (err) => {
+        if (err) throw err;
+        // Find the user in the database and set the img variable to the correct path
+        mongo.db.collection('users')
+          .updateOne({username: req.user.username}, {
+            $set: {img: '/images/profileImages/' + req.user.username}
+          }, (err, result) => {
+            if (err) {throw err}else {
+              // Callback
+              res.redirect('back')
+            }
+          })
+      })
+  })
+
+  .get('/download/users', adminRequired, (req, res) => {
+    mongo.db.collection('users')
+      .find().toArray(function(err, result) {
+        if (err) throw err;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(result));
+    })
+  })
+
+
+  .post('/upload/users', uploadUsers.single('upload-users'), async (req, res) => {
+    try {
+      var newUsers = JSON.parse(req.file.buffer.toString())
+
+      // Wrap the forEach loop with Promise.all()
+      await Promise.all(newUsers.map(async (item) => {
+        return new Promise(async (resolve, reject) => {
+          // Checks if username is already in use
+          const user = await mongo.db.collection('users')
+            .findOne({ lcUsername: item.lcUsername }, { collation: { locale: "en", strength: 2 } })
+
+          if (user) {
+            delete item._id
+            mongo.db.collection('users')
+              .updateOne({ lcUsername: item.lcUsername }, { $set: merge(user, item) }, (err, result) => {
+                if (err) {
+                  console.log(err)
+                  reject(err)
+                } else {
+                  console.log('The user', item.lcUsername, 'is updated')
+                  resolve()
+                }
+              })
+          } else {
+            // Insert the new username into the database
+            if (!item.img) {
+              item.img = '/images/profile.png'
+            }
+
+            mongo.db.collection('users')
+              .insertOne(item, (err, result) => {
+                if (err) {
+                  console.log(err)
+                  reject(err)
+                } else {
+                  console.log('The user', item.lcUsername, 'is added')
+                  resolve()
+                }
+              })
           }
         })
-    })
+      }))
+
+      res.redirect('back')
+    } catch (err) {
+      console.log(err)
+      res.status(500).send('Internal server error')
+    }
   })
 
 // Export these routes to be used in app.js

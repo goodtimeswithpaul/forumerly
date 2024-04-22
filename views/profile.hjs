@@ -39,6 +39,23 @@
               <li><b>Join date: </b>{{profile.joinDate}}</li>
               <li><b>Post count: </b>{{profile.postCount}}</li>
             </ul>
+            <hr>
+            {{#profile.admin}}
+            {{#viewerIsOwner}}
+              <form action="/upload/users" method="post" enctype="multipart/form-data">
+                <div class="upload">
+                  <input id="fileUpload" type="file" name="upload-users" />
+                  <input type="button" class="btn" value="Browse" />
+                  <span id="fileNameUpload" class="fileName">Select file..</span>
+                </div>
+                <br>
+                <br>
+                <button type="submit" class="btn btn-primary">Upload users</button>
+              </form>
+              <hr>
+              <a class="btn btn-primary" href="/download/users" role="button">Download all users</a>
+            {{/viewerIsOwner}}
+            {{/profile.admin}}
           </div>
         </div>
         <div class="col-sm-8">
